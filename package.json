@@ -1,0 +1,21 @@
+{
+  "name": "@jupyter-book/myst-plugin-release-notes",
+  "version": "0.1.0",
+  "description": "MyST plugin to generate consolidated release notes from GitHub releases",
+  "type": "module",
+  "main": "src/index.mjs",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "keywords": [
+    "myst",
+    "plugin",
+    "release-notes",
+    "github"
+  ],
+  "author": "Jupyter Book Team",
+  "license": "MIT",
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  }
+}

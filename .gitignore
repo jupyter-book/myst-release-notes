@@ -1,0 +1,13 @@
+_build
+.nox
+.venv
+node_modules
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+.DS_Store
+.vscode
+.env
+.env.*

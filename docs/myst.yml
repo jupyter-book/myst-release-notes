@@ -1,0 +1,8 @@
+version: 1
+project:
+  title: MyST Release Notes Plugin
+  plugins:
+    - ../src/index.mjs
+    - https://github.com/jupyter-book/myst-plugins/releases/download/github-handle-links%402025-12-01/index.mjs
+site:
+  template: book-theme
