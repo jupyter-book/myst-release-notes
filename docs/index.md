@@ -28,13 +28,13 @@ Use the `release-notes` directive with the GitHub repository in `org/repo` forma
 ```
 ````
 
-### Options
+### Filter releases by date
 
-`:after:`
-: Only show releases after this date. Supports `YYYY-MM-DD` format or relative dates like `-6m` (6 months ago) or `-2w` (2 weeks ago).
+The `:after:` flag only pulls releases after this date. Supports `YYYY-MM-DD` format or relative dates like `-6m` (6 months ago) or `-2w` (2 weeks ago).
 
-`:skip-sections:`
-: A regex pattern to filter out sections from release notes. Matching sections (and their content until the next sibling heading) are removed.
+### Filter sections by name
+
+The `:skip-sections:` argument is a regex pattern to filter out sections from release notes. Matching sections (and their content until the next sibling heading) are removed.
 
 ### Example with options
 
