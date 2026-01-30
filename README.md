@@ -4,6 +4,8 @@ A MyST plugin to generate consolidated release notes from a GitHub repository.
 
 This plugin allows you to consolidate and stack the notes from all releases in a GitHub repository. It allows you to create a scannable and persistent space for all the latest releases in your project.
 
+**🚫 Warning - this is experimental**: We're experimenting with this plugin to show release notes on jupyterbook.org. It might change rapidly! You're welcome to use it and give feedback. Eventually it will stabilize, but not just yet!
+
 ## Documentation
 
 See the [documentation site](https://jupyter-book.github.io/myst-release-notes) for usage instructions and a live demo.
