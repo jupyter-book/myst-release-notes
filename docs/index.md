@@ -36,6 +36,14 @@ The `:after:` flag only pulls releases after this date. Supports `YYYY-MM-DD` fo
 
 The `:skip-sections:` argument is a regex pattern to filter out sections from release notes. Matching sections (and their content until the next sibling heading) are removed.
 
+### Filter lines by content
+
+The `:skip-lines:` argument is a regex pattern to filter out the lines in release notes based on whether they match the argument. Use this to remove PRs that you don't need in your change log like "Release" PRs.
+
+### Remove empty sections
+
+The `:remove-empty-sections:` argument is a flag to remove any sections if they are empty. It is run *before* headers are demoted to **bold sections** but *after* the "filter lines" step above in case you want to remove a section after filtering out all its content.
+
 ### Example with options
 
 ````markdown

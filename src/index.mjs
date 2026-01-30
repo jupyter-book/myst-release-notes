@@ -132,6 +132,73 @@ function getTextContent(node) {
 }
 
 /**
+ * Filter out list items whose text matches the skip-lines regex.
+ */
+function filterLines(children, skipRegex) {
+  if (!skipRegex || !children) return children;
+  const regex = new RegExp(skipRegex, 'i');
+
+  return children.map(node => {
+    if (node.type === 'list' && node.children) {
+      const filteredItems = node.children.filter(item => !regex.test(getTextContent(item)));
+      if (filteredItems.length === 0) return null;
+      return { ...node, children: filteredItems };
+    }
+    return node;
+  }).filter(Boolean);
+}
+
+/**
+ * Remove sections (heading + content) that have no content after the heading.
+ */
+function removeEmptySections(children) {
+  if (!children || children.length === 0) return children;
+
+  const result = [];
+  let i = 0;
+
+  while (i < children.length) {
+    const node = children[i];
+
+    if (node.type === 'heading') {
+      const headingDepth = node.depth || 1;
+      // Collect content until next sibling or higher-level heading
+      const sectionContent = [];
+      let j = i + 1;
+
+      while (j < children.length) {
+        const next = children[j];
+        if (next.type === 'heading' && (next.depth || 1) <= headingDepth) {
+          break;
+        }
+        sectionContent.push(next);
+        j++;
+      }
+
+      // Check if section has meaningful content
+      const hasContent = sectionContent.some(n => {
+        if (n.type === 'list' && n.children && n.children.length > 0) return true;
+        if (n.type === 'paragraph') return true;
+        if (n.type === 'code') return true;
+        return false;
+      });
+
+      if (hasContent) {
+        result.push(node);
+        result.push(...sectionContent);
+      }
+      // Skip to next section
+      i = j;
+    } else {
+      result.push(node);
+      i++;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Demote all headings to bold paragraphs within parsed content.
  */
 function demoteHeadings(children) {
@@ -182,6 +249,14 @@ const releaseNotesDirective = {
       type: String,
       doc: 'Regex pattern to filter out sections from release notes',
     },
+    'skip-lines': {
+      type: String,
+      doc: 'Regex pattern to filter out lines from release notes',
+    },
+    'remove-empty-sections': {
+      type: Boolean,
+      doc: 'Remove sections that are empty after filtering',
+    },
   },
   run(data, vfile, ctx) {
     const repo = data.arg;
@@ -215,6 +290,8 @@ const releaseNotesDirective = {
     filteredReleases.sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
 
     const skipSections = data.options?.['skip-sections'];
+    const skipLines = data.options?.['skip-lines'];
+    const removeEmpty = data.options?.['remove-empty-sections'];
     const nodes = [];
 
     for (const release of filteredReleases) {
@@ -251,6 +328,14 @@ const releaseNotesDirective = {
 
         // Filter out skipped sections
         bodyChildren = filterSections(bodyChildren, skipSections);
+
+        // Filter out skipped lines
+        bodyChildren = filterLines(bodyChildren, skipLines);
+
+        // Remove empty sections if requested
+        if (removeEmpty) {
+          bodyChildren = removeEmptySections(bodyChildren);
+        }
 
         // Demote all headings to bold
         bodyChildren = demoteHeadings(bodyChildren);

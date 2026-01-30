@@ -72,4 +72,21 @@ describe('release-notes plugin', () => {
     const deepHeadings = headings.filter(h => h.depth > 2);
     expect(deepHeadings).toHaveLength(0);
   });
+
+  test('skip-lines filters out release PRs', () => {
+    const content = JSON.parse(readFileSync(TEST_FILE, 'utf8'));
+    const fullText = getAllText(content.mdast);
+
+    // Should not contain "🚀 Release" lines
+    expect(fullText).not.toMatch(/🚀 Release/);
+  });
+
+  test('remove-empty-sections removes Other merged PRs', () => {
+    const content = JSON.parse(readFileSync(TEST_FILE, 'utf8'));
+    const fullText = getAllText(content.mdast);
+
+    // "Other merged PRs" section should be removed because it only contains release PRs
+    // which are filtered out by skip-lines
+    expect(fullText).not.toMatch(/Other merged PRs/i);
+  });
 });
