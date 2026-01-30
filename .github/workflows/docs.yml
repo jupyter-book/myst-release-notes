@@ -24,11 +24,14 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install MyST
-        run: npm install -g mystmd
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install just
+        uses: extractions/setup-just@v2
 
       - name: Build docs
-        run: cd docs && myst build --html
+        run: just docs
         env:
           GH_TOKEN: ${{ github.token }}
 
