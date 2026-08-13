@@ -48,14 +48,29 @@ The heading and everything up to the next heading of the same or higher level is
 
 ### `skip-lines`
 
-Remove bullet list items whose text matches this regex (case-insensitive).
-Useful for dropping automated entries like "Release" PRs.
+Remove bullet list items and paragraphs whose text matches this regex (case-insensitive).
+Useful for dropping automated entries like "Release" PRs, or GitHub's automatic "Full Changelog" footer line.
 If every item in a list matches, the whole list is removed.
 
 ### `remove-empty-sections`
 
 Remove sections that have no content under their heading.
 This runs after `skip-lines`, so a section whose items were all filtered out is also removed.
+
+### `group-by`
+
+Aggregate releases by `minor` or `major` version, so a run of patch releases becomes one entry like `v0.1.x`.
+Sections with the same heading (like "Bugs fixed") are merged across releases, newest first, and each entry starts with a line linking every release it contains.
+Releases without a recognizable version in their tag are shown individually.
+`after` and the skip options apply to each release before grouping; `limit` counts grouped entries.
+
+````markdown
+```{release-notes} jupyter-book/mystmd
+:group-by: minor
+```
+````
+
+See it live in the [mystmd example](./examples/mystmd.md).
 
 ### `display`
 
