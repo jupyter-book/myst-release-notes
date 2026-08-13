@@ -12,5 +12,6 @@ project:
       children:
         - file: examples/mystmd.md
         - file: examples/myst-listing.md
+    - file: releases.md
 site:
   template: book-theme

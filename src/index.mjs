@@ -142,13 +142,18 @@ function getTextContent(node) {
 }
 
 /**
- * Filter out list items whose text matches the skip-lines regex.
+ * Filter out list items and paragraphs whose text matches the skip-lines
+ * regex. Paragraph matching lets users drop un-headinged lines like GitHub's
+ * automatic "Full Changelog" footer, which skip-sections cannot reach.
  */
 function filterLines(children, skipRegex) {
   if (!skipRegex || !children) return children;
   const regex = new RegExp(skipRegex, 'i');
 
   return children.map(node => {
+    if (node.type === 'paragraph' && regex.test(getTextContent(node))) {
+      return null;
+    }
     if (node.type === 'list' && node.children) {
       const filteredItems = node.children.filter(item => !regex.test(getTextContent(item)));
       if (filteredItems.length === 0) return null;
@@ -203,6 +208,107 @@ function removeEmptySections(children) {
   return result;
 }
 
+/**
+ * Parse a version out of a tag like v0.1.12 or mystmd@1.10.1.
+ * Returns { prefix, major, minor } or null for non-semver tags.
+ */
+function parseTagVersion(tag) {
+  const m = (tag || '').match(/(\d+)\.(\d+)\.\d+/);
+  if (!m) return null;
+  return { prefix: tag.slice(0, m.index), major: m[1], minor: m[2] };
+}
+
+/** A "Releases: v0.1.9 · v0.1.8" paragraph linking each release in a group. */
+function releasesLine(releases) {
+  const links = releases.flatMap((r, i) => [
+    ...(i ? [{ type: 'text', value: ' · ' }] : []),
+    {
+      type: 'link',
+      url: r.html_url,
+      children: [{ type: 'text', value: r.tag_name || r.name || '' }],
+    },
+  ]);
+  return {
+    type: 'paragraph',
+    children: [
+      { type: 'strong', children: [{ type: 'text', value: 'Releases:' }] },
+      { type: 'text', value: ' ' },
+      ...links,
+    ],
+  };
+}
+
+/**
+ * Merge release bodies (newest first) into one: content before the first
+ * heading concatenates at the top, then sections merged by heading text
+ * (case-insensitive, first-seen order, ignoring heading depth) with
+ * adjacent lists fused into one.
+ */
+function mergeBodies(bodies) {
+  const preamble = [];
+  const sections = new Map();
+  for (const body of bodies) {
+    let current = null;
+    for (const node of body) {
+      if (node.type === 'heading') {
+        const key = getTextContent(node).trim().toLowerCase();
+        if (!sections.has(key)) sections.set(key, { heading: node, content: [] });
+        current = sections.get(key).content;
+      } else {
+        (current ?? preamble).push(node);
+      }
+    }
+  }
+  const merged = [...preamble];
+  for (const { heading, content } of sections.values()) {
+    merged.push(heading);
+    for (const node of content) {
+      const prev = merged[merged.length - 1];
+      if (node.type === 'list' && prev?.type === 'list' && prev.ordered === node.ordered) {
+        prev.children.push(...node.children);
+      } else {
+        merged.push(node);
+      }
+    }
+  }
+  return merged;
+}
+
+/**
+ * Group releases by minor or major version, one merged item per group
+ * titled e.g. "v0.1.x". Non-semver tags stay as their own items.
+ */
+function groupReleases(releases, node) {
+  // Merge newest-first so merged bullets read like the feed does. Items are
+  // appended groups-after-singletons; myst-listing re-sorts them by date.
+  const sorted = [...releases].sort(
+    (a, b) => new Date(b.published_at || 0) - new Date(a.published_at || 0)
+  );
+  const items = [];
+  const groups = new Map();
+  for (const release of sorted) {
+    const v = parseTagVersion(release.tag_name || release.name);
+    if (!v) {
+      items.push(releaseToItem(release, node));
+      continue;
+    }
+    const key =
+      node.groupBy === 'major' ? `${v.prefix}${v.major}` : `${v.prefix}${v.major}.${v.minor}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(release);
+  }
+  for (const [key, members] of groups) {
+    items.push({
+      title: `${key}.x`,
+      date: members[0].published_at,
+      // No url: there is no GitHub page for "v0.1.x"; the Releases line
+      // links each member release instead.
+      body: [releasesLine(members), ...mergeBodies(members.map(r => releaseToItem(r, node).body))],
+    });
+  }
+  return items;
+}
+
 /** One GitHub release as a myst-listing item (title, date, url, body). */
 function releaseToItem(release, node) {
   const body = release.body || '';
@@ -243,11 +349,15 @@ const releaseNotesDirective = {
     },
     'skip-lines': {
       type: String,
-      doc: 'Remove list items whose text matches this regex (case-insensitive)',
+      doc: 'Remove list items and paragraphs whose text matches this regex (case-insensitive)',
     },
     'remove-empty-sections': {
       type: Boolean,
       doc: 'Remove sections that are empty after filtering',
+    },
+    'group-by': {
+      type: String,
+      doc: "Aggregate releases by 'minor' or 'major' version, merging sections with the same heading",
     },
     display: {
       type: String,
@@ -272,6 +382,7 @@ const releaseNotesDirective = {
         skipSections: o['skip-sections'],
         skipLines: o['skip-lines'],
         removeEmptySections: o['remove-empty-sections'],
+        groupBy: o['group-by'],
         // Fields myst-listing's render transform expects on every placeholder
         // (it defaults the rest; an undefined limit means no limit).
         display: o.display ?? 'feed',
@@ -301,7 +412,12 @@ const collectTransform = {
         if (afterDate) {
           releases = releases.filter(r => new Date(r.published_at) >= afterDate);
         }
-        node.items = releases.map(r => releaseToItem(r, node));
+        if (node.groupBy && node.groupBy !== 'minor' && node.groupBy !== 'major') {
+          throw new Error(`:group-by: must be 'minor' or 'major', got '${node.groupBy}'`);
+        }
+        node.items = node.groupBy
+          ? groupReleases(releases, node)
+          : releases.map(r => releaseToItem(r, node));
       } catch (err) {
         // myst-listing renders node.error as an error admonition.
         node.error = String(err?.message ?? err);
@@ -317,3 +433,5 @@ const plugin = {
 };
 
 export default plugin;
+// Pure helpers exported for unit tests only.
+export { parseTagVersion, mergeBodies };
