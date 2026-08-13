@@ -1,33 +1,20 @@
 # MyST Release Notes Plugin
 
-A MyST plugin to generate consolidated release notes from a GitHub repository.
+A MyST plugin that collects the release notes from a GitHub repository onto one page of your site.
 
-This plugin allows you to consolidate and stack the notes from all releases in a GitHub repository. It allows you to create a scannable and persistent space for all the latest releases in your project.
+**Warning**: this plugin is experimental and may change quickly.
+We are trying it out for release notes on jupyterbook.org.
+Feedback is welcome.
 
-**🚫 Warning - this is experimental**: We're experimenting with this plugin to show release notes on jupyterbook.org. It might change rapidly! You're welcome to use it and give feedback. Eventually it will stabilize, but not just yet!
+## Usage
 
-## Documentation
+See the [documentation](https://jupyter-book.github.io/myst-release-notes) for setup, all directive options, and live examples.
 
-See the [documentation site](https://jupyter-book.github.io/myst-release-notes) for usage instructions and a live demo.
-
-## Quick start
-
-Add the plugin to your `myst.yml`:
-
-```yaml
-project:
-  plugins:
-    - https://github.com/jupyter-book/myst-release-notes/releases/download/v0.1.0/index.mjs
-```
-
-Replace `v0.1.0` with the desired version from the [releases page](https://github.com/jupyter-book/myst-release-notes/releases).
-
-Then use the directive in your documents:
+Once set up, the directive looks like this:
 
 ````markdown
 ```{release-notes} org/repo
 :after: -6m
-:skip-sections: Contributors|Full Changelog
 ```
 ````
 

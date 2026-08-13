@@ -1,24 +1,45 @@
 import { execSync } from 'child_process';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, mkdirSync } from 'fs';
 import path from 'path';
 
 /**
+ * A myst-listing collector for GitHub releases.
+ * The {release-notes} directive emits a myst-listing placeholder with
+ * `source: github-releases`; the collector transform below fetches the
+ * releases and fills `node.items`, and myst-listing renders the display
+ * (feed by default). Load this plugin before myst-listing in myst.yml.
+ */
+const PLACEHOLDER = 'listingPlaceholder';
+const SOURCE = 'github-releases';
+
+// parseMyst is only handed to directives, not transforms; the directive
+// stashes it here for the collector (see myst-listing's shared.ts and
+// https://github.com/jupyter-book/mystmd/issues/2626).
+const ctxRef = {};
+
+/**
  * Parse the :after: option into a Date object.
- * Supports: YYYY-MM-DD or -Nw (weeks) or -Nm (months)
+ * Supports: YYYY-MM-DD or relative -Nd/-Nw/-Nm/-Ny.
+ * Throws on an unparseable value so the user gets an error admonition
+ * instead of a silently unfiltered listing.
  */
 function parseAfterDate(afterStr) {
   if (!afterStr) return null;
 
   // Relative format: -3m, -2w, etc.
-  const relativeMatch = afterStr.match(/^-(\d+)([wm])$/);
+  const relativeMatch = afterStr.match(/^-(\d+)([dwmy])$/);
   if (relativeMatch) {
     const amount = parseInt(relativeMatch[1], 10);
     const unit = relativeMatch[2];
     const date = new Date();
-    if (unit === 'w') {
+    if (unit === 'd') {
+      date.setDate(date.getDate() - amount);
+    } else if (unit === 'w') {
       date.setDate(date.getDate() - amount * 7);
     } else if (unit === 'm') {
       date.setMonth(date.getMonth() - amount);
+    } else {
+      date.setFullYear(date.getFullYear() - amount);
     }
     return date;
   }
@@ -29,54 +50,43 @@ function parseAfterDate(afterStr) {
     return parsed;
   }
 
-  return null;
+  throw new Error(
+    `could not parse :after: value '${afterStr}' (use YYYY-MM-DD or -Nd/-Nw/-Nm/-Ny)`
+  );
 }
 
 /**
- * Fetch releases from GitHub API using gh CLI.
- * Returns cached data if available.
+ * Fetch releases from GitHub using the gh CLI, caching per repo.
+ * Throws on fetch failure so the listing renders an error admonition.
  */
 function fetchReleases(repo, cacheDir) {
   const cacheFile = path.join(cacheDir, 'cache.json');
-
-  // Check cache
-  if (existsSync(cacheFile)) {
-    try {
-      const cached = JSON.parse(readFileSync(cacheFile, 'utf8'));
-      if (cached[repo]) {
-        return cached[repo];
-      }
-    } catch {
-      // Cache read failed, fetch fresh
-    }
-  }
-
-  // Fetch from GitHub
+  let cache = {};
   try {
-    const result = execSync(
+    cache = JSON.parse(readFileSync(cacheFile, 'utf8'));
+  } catch {
+    // No cache yet
+  }
+  if (cache[repo]) return cache[repo];
+
+  let result;
+  try {
+    result = execSync(
       `gh api repos/${repo}/releases --paginate`,
       { encoding: 'utf8', maxBuffer: 50 * 1024 * 1024 }
     );
-    const releases = JSON.parse(result);
-
-    // Save to cache
-    mkdirSync(cacheDir, { recursive: true });
-    let cacheData = {};
-    if (existsSync(cacheFile)) {
-      try {
-        cacheData = JSON.parse(readFileSync(cacheFile, 'utf8'));
-      } catch {
-        // Start fresh
-      }
-    }
-    cacheData[repo] = releases;
-    writeFileSync(cacheFile, JSON.stringify(cacheData, null, 2));
-
-    return releases;
   } catch (err) {
-    console.error(`myst-release-notes: Failed to fetch releases for ${repo}:`, err.message);
-    return [];
+    const stderr = String(err.stderr ?? '').trim().split('\n')[0];
+    throw new Error(
+      `fetching releases for '${repo}' with the GitHub CLI failed` +
+        ` (is 'gh' installed and authenticated?)${stderr ? `: ${stderr}` : ''}`
+    );
   }
+
+  cache[repo] = JSON.parse(result);
+  mkdirSync(cacheDir, { recursive: true });
+  writeFileSync(cacheFile, JSON.stringify(cache, null, 2));
+  return cache[repo];
 }
 
 /**
@@ -175,13 +185,8 @@ function removeEmptySections(children) {
         j++;
       }
 
-      // Check if section has meaningful content
-      const hasContent = sectionContent.some(n => {
-        if (n.type === 'list' && n.children && n.children.length > 0) return true;
-        if (n.type === 'paragraph') return true;
-        if (n.type === 'code') return true;
-        return false;
-      });
+      // Anything but a (deeper, also-empty) heading counts as content.
+      const hasContent = sectionContent.some(n => n.type !== 'heading');
 
       if (hasContent) {
         result.push(node);
@@ -198,44 +203,31 @@ function removeEmptySections(children) {
   return result;
 }
 
-/**
- * Demote all headings to bold paragraphs within parsed content.
- */
-function demoteHeadings(children) {
-  if (!children) return children;
-
-  return children.map(node => {
-    if (node.type === 'heading') {
-      // Convert heading to a bold paragraph
-      return {
-        type: 'paragraph',
-        children: [
-          {
-            type: 'strong',
-            children: node.children || [{ type: 'text', value: '' }],
-          },
-        ],
-      };
+/** One GitHub release as a myst-listing item (title, date, url, body). */
+function releaseToItem(release, node) {
+  const body = release.body || '';
+  let children = [];
+  if (body.trim() && ctxRef.parseMyst) {
+    children = ctxRef.parseMyst(body)?.children || [];
+    children = filterSections(children, node.skipSections);
+    children = filterLines(children, node.skipLines);
+    if (node.removeEmptySections) {
+      children = removeEmptySections(children);
     }
-    // Recurse into children
-    if (node.children) {
-      return { ...node, children: demoteHeadings(node.children) };
-    }
-    return node;
-  });
-}
-
-/**
- * Format a date as YYYY-MM-DD
- */
-function formatDate(dateStr) {
-  const date = new Date(dateStr);
-  return date.toISOString().split('T')[0];
+  }
+  return {
+    title: release.name || release.tag_name || '',
+    // myst-listing parses and formats ISO dates itself; a null (draft
+    // release) renders no date and sorts last.
+    date: release.published_at,
+    url: release.html_url,
+    body: children,
+  };
 }
 
 const releaseNotesDirective = {
   name: 'release-notes',
-  doc: 'Display consolidated release notes from a GitHub repository.',
+  doc: 'Display release notes from a GitHub repository as a myst-listing.',
   arg: {
     type: String,
     doc: 'GitHub repository in org/repo format',
@@ -243,124 +235,85 @@ const releaseNotesDirective = {
   options: {
     after: {
       type: String,
-      doc: 'Only show releases after this date (YYYY-MM-DD or -Nw/-Nm for relative)',
+      doc: 'Only show releases after this date (YYYY-MM-DD, or relative -Nd/-Nw/-Nm/-Ny)',
     },
     'skip-sections': {
       type: String,
-      doc: 'Regex pattern to filter out sections from release notes',
+      doc: 'Remove sections whose heading matches this regex (case-insensitive)',
     },
     'skip-lines': {
       type: String,
-      doc: 'Regex pattern to filter out lines from release notes',
+      doc: 'Remove list items whose text matches this regex (case-insensitive)',
     },
     'remove-empty-sections': {
       type: Boolean,
       doc: 'Remove sections that are empty after filtering',
     },
+    display: {
+      type: String,
+      doc: "myst-listing display to use: 'feed' (default), 'summary', 'table', or 'gallery'",
+    },
+    limit: {
+      type: Number,
+      doc: 'Maximum number of releases to show. Default: no limit.',
+    },
   },
-  run(data, vfile, ctx) {
-    const repo = data.arg;
-    if (!repo || !repo.includes('/')) {
-      return [{
-        type: 'paragraph',
-        children: [{ type: 'text', value: 'Error: Please provide a repository in org/repo format.' }],
-      }];
-    }
+  run(data, _vfile, ctx) {
+    if (!ctxRef.parseMyst && ctx?.parseMyst) ctxRef.parseMyst = ctx.parseMyst;
+    const o = data.options ?? {};
+    return [
+      {
+        type: PLACEHOLDER,
+        children: [],
+        source: SOURCE,
+        path: data.arg,
+        // Options read by the collector below.
+        after: o.after,
+        skipSections: o['skip-sections'],
+        skipLines: o['skip-lines'],
+        removeEmptySections: o['remove-empty-sections'],
+        // Fields myst-listing's render transform expects on every placeholder
+        // (it defaults the rest; an undefined limit means no limit).
+        display: o.display ?? 'feed',
+        sort: 'date-desc',
+        limit: o.limit,
+        columns: ['title', 'date'],
+      },
+    ];
+  },
+};
 
-    // Determine cache directory
-    const rootDir = vfile?.cwd || process.cwd();
-    const cacheDir = path.join(rootDir, '_build', 'myst-releases');
-
-    // Fetch releases
-    const releases = fetchReleases(repo, cacheDir);
-    if (!releases || releases.length === 0) {
-      return [{
-        type: 'paragraph',
-        children: [{ type: 'text', value: `No releases found for ${repo}.` }],
-      }];
-    }
-
-    // Filter by date
-    const afterDate = parseAfterDate(data.options?.after);
-    const filteredReleases = afterDate
-      ? releases.filter(r => new Date(r.published_at) >= afterDate)
-      : releases;
-
-    // Sort by date descending (newest first)
-    filteredReleases.sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
-
-    const skipSections = data.options?.['skip-sections'];
-    const skipLines = data.options?.['skip-lines'];
-    const removeEmpty = data.options?.['remove-empty-sections'];
-    const nodes = [];
-
-    for (const release of filteredReleases) {
-      const tagName = release.tag_name || '';
-      const releaseName = release.name || tagName;
-      const releaseDate = formatDate(release.published_at);
-      const releaseUrl = release.html_url;
-      const body = release.body || '';
-
-      // Create title node as H2
-      nodes.push({
-        type: 'heading',
-        depth: 2,
-        children: [{ type: 'text', value: releaseName }],
-      });
-
-      // Add date and link line
-      nodes.push({
-        type: 'paragraph',
-        children: [
-          { type: 'text', value: `${releaseDate} | ` },
-          {
-            type: 'link',
-            url: releaseUrl,
-            children: [{ type: 'text', value: 'View release' }],
-          },
-        ],
-      });
-
-      // Parse and process the release body
-      if (body.trim()) {
-        const parsed = ctx.parseMyst(body);
-        let bodyChildren = parsed?.children || [];
-
-        // Filter out skipped sections
-        bodyChildren = filterSections(bodyChildren, skipSections);
-
-        // Filter out skipped lines
-        bodyChildren = filterLines(bodyChildren, skipLines);
-
-        // Remove empty sections if requested
-        if (removeEmpty) {
-          bodyChildren = removeEmptySections(bodyChildren);
+const collectTransform = {
+  name: 'release-notes-collect',
+  stage: 'document',
+  doc: 'Fill myst-listing placeholders whose :source: is github-releases.',
+  plugin: (_opts, utils) => (tree, vfile) => {
+    for (const node of utils.selectAll(PLACEHOLDER, tree)) {
+      if (node.source !== SOURCE) continue;
+      try {
+        const repo = node.path;
+        if (!repo || !repo.includes('/')) {
+          throw new Error('provide a GitHub repository in org/repo format');
         }
-
-        // Demote all headings to bold
-        bodyChildren = demoteHeadings(bodyChildren);
-
-        nodes.push(...bodyChildren);
+        const cacheDir = path.join(vfile?.cwd || process.cwd(), '_build', 'myst-releases');
+        let releases = fetchReleases(repo, cacheDir);
+        const afterDate = parseAfterDate(node.after);
+        if (afterDate) {
+          releases = releases.filter(r => new Date(r.published_at) >= afterDate);
+        }
+        node.items = releases.map(r => releaseToItem(r, node));
+      } catch (err) {
+        // myst-listing renders node.error as an error admonition.
+        node.error = String(err?.message ?? err);
       }
-
-      // Add a separator between releases
-      nodes.push({
-        type: 'thematicBreak',
-      });
     }
-
-    // Remove trailing thematic break
-    if (nodes.length > 0 && nodes[nodes.length - 1].type === 'thematicBreak') {
-      nodes.pop();
-    }
-
-    return nodes;
   },
 };
 
 const plugin = {
   name: 'MyST Release Notes',
   directives: [releaseNotesDirective],
+  transforms: [collectTransform],
 };
 
 export default plugin;
