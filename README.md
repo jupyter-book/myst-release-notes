@@ -8,7 +8,7 @@ Feedback is welcome.
 
 ## Usage
 
-See the [documentation](https://jupyter-book.github.io/myst-release-notes) for setup, all directive options, and live examples.
+See the [documentation](https://contrib.mystmd.org/myst-release-notes/) for setup, all directive options, and live examples.
 
 Once set up, the directive looks like this:
 

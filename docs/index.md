@@ -13,12 +13,12 @@ Add both plugins to `project.plugins` in `myst.yml`, with this plugin first:
 ```yaml
 project:
   plugins:
-    - https://github.com/jupyter-book/myst-release-notes/releases/latest/download/index.mjs
+    - https://github.com/myst-contrib/myst-release-notes/releases/latest/download/index.mjs
     - https://github.com/myst-contrib/myst-listing/releases/latest/download/plugin.mjs
 ```
 
 These URLs always point at each plugin's latest release.
-To pin versions, pick them from the release pages ([myst-release-notes](https://github.com/jupyter-book/myst-release-notes/releases), [myst-listing](https://github.com/myst-contrib/myst-listing/releases)) and use their download URLs instead.
+To pin versions, pick them from the release pages ([myst-release-notes](https://github.com/myst-contrib/myst-release-notes/releases), [myst-listing](https://github.com/myst-contrib/myst-listing/releases)) and use their download URLs instead.
 
 Then use the `release-notes` directive with a repository in `org/repo` format:
 
