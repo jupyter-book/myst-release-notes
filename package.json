@@ -5,7 +5,9 @@
   "type": "module",
   "main": "src/index.mjs",
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "docs": "cd docs && myst build --html",
+    "docs:live": "cd docs && myst start"
   },
   "keywords": [
     "myst",
@@ -16,6 +18,7 @@
   "author": "Jupyter Book Team",
   "license": "MIT",
   "devDependencies": {
+    "mystmd": "^1.10.1",
     "vitest": "^3.0.0"
   }
 }

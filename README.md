@@ -23,35 +23,29 @@ Once set up, the directive looks like this:
 ### Install prerequisites
 
 ```bash
-# Install just (command runner)
+# Install bun (runtime and package manager)
 # macOS
-brew install just
-# or see https://github.com/casey/just#installation
-
-# Install uv (Python package manager)
-# macOS
-brew install uv
-# or see https://github.com/astral-sh/uv#installation
+brew install oven-sh/bun/bun
+# or see https://bun.sh/docs/installation
 
 # Install gh (GitHub CLI, for fetching releases)
 # macOS
 brew install gh
 # or see https://cli.github.com/
-
-# Node.js 20+ is also required
 ```
 
 ### Build and test
 
 ```bash
-# Build and serve docs locally (creates .venv automatically)
-just docs-live
+# Install dependencies (including MyST)
+bun install
+
+# Build and serve docs locally
+bun run docs:live
 
 # Build docs (static)
-just docs
+bun run docs
 
-# Run tests (installs node dependencies automatically)
-just test
+# Run tests
+bun run test
 ```
-
-The first run of `just docs` or `just docs-live` will create a `.venv` folder and install MyST.
