@@ -2,7 +2,15 @@ version: 1
 project:
   title: MyST Release Notes Plugin
   plugins:
+    # This plugin must load before myst-listing so its collector runs first.
     - ../src/index.mjs
+    - https://github.com/myst-contrib/myst-listing/releases/latest/download/plugin.mjs
     - https://github.com/jupyter-book/myst-plugins/releases/download/github-handle-links%402025-12-01/index.mjs
+  toc:
+    - file: index.md
+    - title: Examples
+      children:
+        - file: examples/mystmd.md
+        - file: examples/myst-listing.md
 site:
   template: book-theme

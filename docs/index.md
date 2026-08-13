@@ -1,26 +1,26 @@
 # MyST Release Notes Plugin
 
-A MyST plugin to generate consolidated release notes from a GitHub repository.
+Collect the release notes from a GitHub repository onto one page of your MyST site.
 
-This plugin allows you to consolidate and stack the notes from all releases in a GitHub repository. It allows you to create a scannable and persistent space for all the latest releases in your project.
-
-**🚫 Warning - this is experimental**: We're experimenting with this plugin to show release notes on jupyterbook.org. It might change rapidly! You're welcome to use it and give feedback. Eventually it will stabilize, but not just yet!
+This plugin fetches releases from GitHub and hands them to [myst-listing](https://github.com/myst-contrib/myst-listing), which renders them as a feed by default.
 
 ## Get started
 
-Enable the plugin by adding it to your `project.plugins` field in `myst.yml`:
+Releases are fetched with the [GitHub CLI](https://cli.github.com/), so `gh` must be installed and authenticated wherever you build your site.
+
+Add both plugins to `project.plugins` in `myst.yml`, with this plugin first:
 
 ```yaml
 project:
   plugins:
-    - https://github.com/jupyter-book/myst-release-notes/releases/download/v0.1.0/index.mjs
+    - https://github.com/jupyter-book/myst-release-notes/releases/latest/download/index.mjs
+    - https://github.com/myst-contrib/myst-listing/releases/latest/download/plugin.mjs
 ```
 
-Replace `v0.1.0` with the version you want to use. See the [releases page](https://github.com/jupyter-book/myst-release-notes/releases) for available versions.
+These URLs always point at each plugin's latest release.
+To pin versions, pick them from the release pages ([myst-release-notes](https://github.com/jupyter-book/myst-release-notes/releases), [myst-listing](https://github.com/myst-contrib/myst-listing/releases)) and use their download URLs instead.
 
-## Usage
-
-Use the `release-notes` directive with the GitHub repository in `org/repo` format:
+Then use the `release-notes` directive with a repository in `org/repo` format:
 
 ````markdown
 ```{release-notes} jupyter-book/mystmd
@@ -28,31 +28,68 @@ Use the `release-notes` directive with the GitHub repository in `org/repo` forma
 ```
 ````
 
-### Filter releases by date
+Fetched releases are cached in `_build/myst-releases/`.
+Delete that folder to fetch fresh data, for example after publishing a new release.
 
-The `:after:` flag only pulls releases after this date. Supports `YYYY-MM-DD` format or relative dates like `-6m` (6 months ago) or `-2w` (2 weeks ago).
+If the directive renders nothing at all, check that myst-listing is also listed in `plugins`.
 
-### Filter sections by name
+## Options
 
-The `:skip-sections:` argument is a regex pattern to filter out sections from release notes. Matching sections (and their content until the next sibling heading) are removed.
+### `after`
 
-### Filter lines by content
+Only include releases published after this date.
+Accepts `YYYY-MM-DD`, or a relative offset in days, weeks, months, or years: `-10d`, `-2w`, `-6m`, `-1y`.
+For repositories with many releases, use this or `limit` to keep the page a reasonable size.
 
-The `:skip-lines:` argument is a regex pattern to filter out the lines in release notes based on whether they match the argument. Use this to remove PRs that you don't need in your change log like "Release" PRs.
+### `skip-sections`
 
-### Remove empty sections
+Remove sections whose heading matches this regex (case-insensitive).
+The heading and everything up to the next heading of the same or higher level is removed.
 
-The `:remove-empty-sections:` argument is a flag to remove any sections if they are empty. It is run *before* headers are demoted to **bold sections** but *after* the "filter lines" step above in case you want to remove a section after filtering out all its content.
+### `skip-lines`
 
-### Example with options
+Remove bullet list items whose text matches this regex (case-insensitive).
+Useful for dropping automated entries like "Release" PRs.
+If every item in a list matches, the whole list is removed.
+
+### `remove-empty-sections`
+
+Remove sections that have no content under their heading.
+This runs after `skip-lines`, so a section whose items were all filtered out is also removed.
+
+### `display`
+
+Which myst-listing display to use: `feed` (default), `summary`, `table`, or `gallery`.
+
+### `limit`
+
+Maximum number of releases to show.
+By default all releases are shown.
+
+### Combined example
 
 ````markdown
 ```{release-notes} jupyter-book/mystmd
 :after: -6m
 :skip-sections: Contributors|Full Changelog
+:limit: 5
 ```
 ````
 
-## Demo
+## Use with the `{listing}` directive
 
-See the [](./releases.md) page for a live demonstration of this plugin showing recent releases from the MyST Document Engine.
+Because this plugin is a myst-listing collector, `:source: github-releases` also works in a plain `{listing}` directive, with the repository as `:path:`:
+
+````markdown
+```{listing}
+:source: github-releases
+:path: jupyter-book/mystmd
+:display: table
+```
+````
+
+However, note that the filtering options (`after`, `skip-sections`, `skip-lines`, `remove-empty-sections`) only work in `{release-notes}`.
+
+## Examples
+
+See [](./examples/mystmd.md) and [](./examples/myst-listing.md) for live examples.
