@@ -7,19 +7,15 @@ Release notes from the `jupyter-book/mystmd` repository over the last 6 months, 
 :::{dropdown} Directive source
 ````markdown
 ```{release-notes} jupyter-book/mystmd
-:after: -6m
-:skip-sections: Contributors to this release|Full Changelog
-:skip-lines: 🚀 Release|full changelog
-:remove-empty-sections:
+:since: -6m
+:skip: Contributors to this release|Full Changelog|🚀 Release
 ```
 ````
 :::
 
 ```{release-notes} jupyter-book/mystmd
-:after: -6m
-:skip-sections: Contributors to this release|Full Changelog
-:skip-lines: 🚀 Release|full changelog
-:remove-empty-sections:
+:since: -6m
+:skip: Contributors to this release|Full Changelog|🚀 Release
 ```
 
 ## Grouped by minor version
@@ -29,19 +25,15 @@ The same releases with [`group-by`](../index.md#group-by), which merges each min
 :::{dropdown} Directive source
 ````markdown
 ```{release-notes} jupyter-book/mystmd
-:after: -6m
-:skip-sections: Contributors to this release|Full Changelog
-:skip-lines: 🚀 Release|full changelog
-:remove-empty-sections:
+:since: -6m
+:skip: Contributors to this release|Full Changelog|🚀 Release
 :group-by: minor
 ```
 ````
 :::
 
 ```{release-notes} jupyter-book/mystmd
-:after: -6m
-:skip-sections: Contributors to this release|Full Changelog
-:skip-lines: 🚀 Release|full changelog
-:remove-empty-sections:
+:since: -6m
+:skip: Contributors to this release|Full Changelog|🚀 Release
 :group-by: minor
 ```

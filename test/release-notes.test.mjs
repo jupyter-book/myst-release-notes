@@ -33,20 +33,20 @@ describe('release-notes plugin', () => {
     expect(fullText).toMatch(/Bug/i);
   });
 
-  test('skip-sections filters out contributors', () => {
+  test('skip filters out contributor sections', () => {
     // At most 2 occurrences (the option shown in the two source dropdowns),
     // none from rendered release bodies
     const matches = fullText.match(/Contributors to this release/g) || [];
     expect(matches.length).toBeLessThanOrEqual(2);
   });
 
-  test('skip-lines filters out release PRs', () => {
+  test('skip filters out release PR lines', () => {
     const matches = fullText.match(/🚀 Release/g) || [];
     expect(matches.length).toBeLessThanOrEqual(2);
   });
 
-  test('remove-empty-sections removes Other merged PRs', () => {
-    // That section only contains release PRs, which skip-lines removed
+  test('empty sections are removed by default', () => {
+    // That section only contains release PRs, which skip removed
     expect(fullText).not.toMatch(/Other merged PRs/i);
   });
 

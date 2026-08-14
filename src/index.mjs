@@ -7,7 +7,7 @@ import path from 'path';
  * The {release-notes} directive emits a myst-listing placeholder with
  * `source: github-releases`; the collector transform below fetches the
  * releases and fills `node.items`, and myst-listing renders the display
- * (feed by default). Load this plugin before myst-listing in myst.yml.
+ * (sections by default). Load this plugin before myst-listing in myst.yml.
  */
 const PLACEHOLDER = 'listingPlaceholder';
 const SOURCE = 'github-releases';
@@ -18,12 +18,12 @@ const SOURCE = 'github-releases';
 const ctxRef = {};
 
 /**
- * Parse the :after: option into a Date object.
+ * Parse the :since: option into a Date object.
  * Supports: YYYY-MM-DD or relative -Nd/-Nw/-Nm/-Ny.
  * Throws on an unparseable value so the user gets an error admonition
  * instead of a silently unfiltered listing.
  */
-function parseAfterDate(afterStr) {
+function parseSinceDate(afterStr) {
   if (!afterStr) return null;
 
   // Relative format: -3m, -2w, etc.
@@ -51,7 +51,7 @@ function parseAfterDate(afterStr) {
   }
 
   throw new Error(
-    `could not parse :after: value '${afterStr}' (use YYYY-MM-DD or -Nd/-Nw/-Nm/-Ny)`
+    `could not parse :since: value '${afterStr}' (use YYYY-MM-DD or -Nd/-Nw/-Nm/-Ny)`
   );
 }
 
@@ -90,7 +90,7 @@ function fetchReleases(repo, cacheDir) {
 }
 
 /**
- * Filter out sections matching the skip-sections regex.
+ * Filter out sections whose heading matches the :skip: regex.
  * Removes matched header and all content until next sibling (same level) header.
  */
 function filterSections(children, skipRegex) {
@@ -142,9 +142,9 @@ function getTextContent(node) {
 }
 
 /**
- * Filter out list items and paragraphs whose text matches the skip-lines
- * regex. Paragraph matching lets users drop un-headinged lines like GitHub's
- * automatic "Full Changelog" footer, which skip-sections cannot reach.
+ * Filter out list items and paragraphs whose text matches the :skip: regex.
+ * Paragraph matching lets users drop un-headinged lines like GitHub's
+ * automatic "Full Changelog" footer, which heading matching cannot reach.
  */
 function filterLines(children, skipRegex) {
   if (!skipRegex || !children) return children;
@@ -315,18 +315,19 @@ function releaseToItem(release, node) {
   let children = [];
   if (body.trim() && ctxRef.parseMyst) {
     children = ctxRef.parseMyst(body)?.children || [];
-    children = filterSections(children, node.skipSections);
-    children = filterLines(children, node.skipLines);
+    children = filterSections(children, node.skip);
+    children = filterLines(children, node.skip);
     if (node.removeEmptySections) {
       children = removeEmptySections(children);
     }
   }
   return {
     title: release.name || release.tag_name || '',
-    // myst-listing parses and formats ISO dates itself; a null (draft
-    // release) renders no date and sorts last.
+    // myst-listing parses and formats ISO dates itself.
     date: release.published_at,
     url: release.html_url,
+    // Displays render tags as chips with no extra config.
+    tags: release.prerelease ? ['pre-release'] : undefined,
     body: children,
   };
 }
@@ -339,21 +340,17 @@ const releaseNotesDirective = {
     doc: 'GitHub repository in org/repo format',
   },
   options: {
-    after: {
+    since: {
       type: String,
       doc: 'Only show releases after this date (YYYY-MM-DD, or relative -Nd/-Nw/-Nm/-Ny)',
     },
-    'skip-sections': {
+    skip: {
       type: String,
-      doc: 'Remove sections whose heading matches this regex (case-insensitive)',
-    },
-    'skip-lines': {
-      type: String,
-      doc: 'Remove list items and paragraphs whose text matches this regex (case-insensitive)',
+      doc: 'Remove matching content: phrases separated by | (case-insensitive; regex works too). A matching heading removes its whole section; a matching list item or paragraph removes itself.',
     },
     'remove-empty-sections': {
       type: Boolean,
-      doc: 'Remove sections that are empty after filtering',
+      doc: 'Remove sections left empty after :skip: filtering (default: true)',
     },
     'group-by': {
       type: String,
@@ -361,7 +358,7 @@ const releaseNotesDirective = {
     },
     display: {
       type: String,
-      doc: "myst-listing display to use: 'feed' (default), 'summary', 'table', or 'gallery'",
+      doc: "myst-listing display to use. Default 'sections': each release becomes its own section in the page outline.",
     },
     limit: {
       type: Number,
@@ -378,17 +375,14 @@ const releaseNotesDirective = {
         source: SOURCE,
         path: data.arg,
         // Options read by the collector below.
-        after: o.after,
-        skipSections: o['skip-sections'],
-        skipLines: o['skip-lines'],
-        removeEmptySections: o['remove-empty-sections'],
+        since: o.since,
+        skip: o.skip,
+        removeEmptySections: o['remove-empty-sections'] ?? true,
         groupBy: o['group-by'],
-        // Fields myst-listing's render transform expects on every placeholder
-        // (it defaults the rest; an undefined limit means no limit).
-        display: o.display ?? 'feed',
-        sort: 'date-desc',
+        // myst-listing defaults the other placeholder fields (sort,
+        // columns); an undefined limit means no limit.
+        display: o.display ?? 'sections',
         limit: o.limit,
-        columns: ['title', 'date'],
       },
     ];
   },
@@ -407,10 +401,12 @@ const collectTransform = {
           throw new Error('provide a GitHub repository in org/repo format');
         }
         const cacheDir = path.join(vfile?.cwd || process.cwd(), '_build', 'myst-releases');
-        let releases = fetchReleases(repo, cacheDir);
-        const afterDate = parseAfterDate(node.after);
-        if (afterDate) {
-          releases = releases.filter(r => new Date(r.published_at) >= afterDate);
+        // gh returns unpublished drafts when the user has push access;
+        // they never belong on a public release-notes page.
+        let releases = fetchReleases(repo, cacheDir).filter(r => !r.draft);
+        const sinceDate = parseSinceDate(node.since);
+        if (sinceDate) {
+          releases = releases.filter(r => new Date(r.published_at) >= sinceDate);
         }
         if (node.groupBy && node.groupBy !== 'minor' && node.groupBy !== 'major') {
           throw new Error(`:group-by: must be 'minor' or 'major', got '${node.groupBy}'`);
