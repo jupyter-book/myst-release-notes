@@ -2,7 +2,7 @@
 
 Collect the release notes from a GitHub repository onto one page of your MyST site.
 
-This plugin fetches releases from GitHub and hands them to [myst-listing](https://github.com/myst-contrib/myst-listing), which renders them as a feed by default.
+This plugin fetches releases from GitHub and hands them to [myst-listing](https://github.com/myst-contrib/myst-listing), which renders each release as its own section by default.
 
 ## Get started
 
@@ -24,9 +24,12 @@ Then use the `release-notes` directive with a repository in `org/repo` format:
 
 ````markdown
 ```{release-notes} jupyter-book/mystmd
-:after: -6m
+:since: -6m
 ```
 ````
+
+Draft releases are never shown.
+Pre-releases are shown and labeled with a `pre-release` tag.
 
 Fetched releases are cached in `_build/myst-releases/`.
 Delete that folder to fetch fresh data, for example after publishing a new release.
@@ -35,34 +38,31 @@ If the directive renders nothing at all, check that myst-listing is also listed 
 
 ## Options
 
-### `after`
+### `since`
 
 Only include releases published after this date.
 Accepts `YYYY-MM-DD`, or a relative offset in days, weeks, months, or years: `-10d`, `-2w`, `-6m`, `-1y`.
 For repositories with many releases, use this or `limit` to keep the page a reasonable size.
 
-### `skip-sections`
+### `skip`
 
-Remove sections whose heading matches this regex (case-insensitive).
-The heading and everything up to the next heading of the same or higher level is removed.
+Remove unwanted content from release bodies: one or more phrases separated by `|`, matched case-insensitively.
+A phrase that matches a heading removes that whole section. One that matches a bullet item or paragraph removes just that line.
+Useful for dropping contributor lists, automated "Release" PRs, or GitHub's automatic "Full Changelog" footer. For example:
 
-### `skip-lines`
+```
+:skip: Contributors to this release|Full Changelog|🚀 Release
+```
 
-Remove bullet list items and paragraphs whose text matches this regex (case-insensitive).
-Useful for dropping automated entries like "Release" PRs, or GitHub's automatic "Full Changelog" footer line.
-If every item in a list matches, the whole list is removed.
-
-### `remove-empty-sections`
-
-Remove sections that have no content under their heading.
-This runs after `skip-lines`, so a section whose items were all filtered out is also removed.
+Phrases are regular expressions, so `.`, `?`, and `(` need a backslash to match literally.
+Sections left empty by this filtering are removed too; set `:remove-empty-sections: false` to keep them.
 
 ### `group-by`
 
 Aggregate releases by `minor` or `major` version, so a run of patch releases becomes one entry like `v0.1.x`.
 Sections with the same heading (like "Bugs fixed") are merged across releases, newest first, and each entry starts with a line linking every release it contains.
 Releases without a recognizable version in their tag are shown individually.
-`after` and the skip options apply to each release before grouping; `limit` counts grouped entries.
+`since` and `skip` apply to each release before grouping; `limit` counts grouped entries.
 
 ````markdown
 ```{release-notes} jupyter-book/mystmd
@@ -74,7 +74,8 @@ See it live in the [mystmd example](./examples/mystmd.md).
 
 ### `display`
 
-Which myst-listing display to use: `feed` (default), `summary`, `table`, or `gallery`.
+Which [myst-listing display](https://contrib.mystmd.org/myst-listing/displays) to use.
+The default, `sections`, renders each release as its own `##`-level section, so releases show up in the page outline.
 
 ### `limit`
 
@@ -85,13 +86,13 @@ By default all releases are shown.
 
 ````markdown
 ```{release-notes} jupyter-book/mystmd
-:after: -6m
-:skip-sections: Contributors|Full Changelog
+:since: -6m
+:skip: Contributors|Full Changelog
 :limit: 5
 ```
 ````
 
-## Use with the `{listing}` directive
+## How to use with the `{listing}` directive
 
 Because this plugin is a myst-listing collector, `:source: github-releases` also works in a plain `{listing}` directive, with the repository as `:path:`:
 
@@ -103,7 +104,8 @@ Because this plugin is a myst-listing collector, `:source: github-releases` also
 ```
 ````
 
-However, note that the filtering options (`after`, `skip-sections`, `skip-lines`, `remove-empty-sections`) only work in `{release-notes}`.
+Two caveats: the filtering options (`since`, `skip`) only work in `{release-notes}`, and release bodies are not parsed in this form, so use a display that doesn't need them (like `table`).
+`{listing}` also defaults `limit` to 10, unlike `{release-notes}` which shows everything.
 
 ## Examples
 

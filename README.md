@@ -14,7 +14,7 @@ Once set up, the directive looks like this:
 
 ````markdown
 ```{release-notes} org/repo
-:after: -6m
+:since: -6m
 ```
 ````
 
